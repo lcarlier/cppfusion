@@ -25,6 +25,7 @@ void MainWindow::showOpenProject(bool /*triggered*/)
     {
         ClangdProject clangdProject = openProject.getClangdProject();
         clientDialog.reset(new ClangClientDialog{std::move(clangdProject), this});
+        clientDialog->setWindowFlags(clientDialog->windowFlags() | Qt::WindowMaximizeButtonHint | Qt::Window);
     }
 }
 
