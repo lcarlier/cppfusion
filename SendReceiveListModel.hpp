@@ -40,6 +40,8 @@ public slots:
 
 private:
     QList<SendReceiveElement> elements;
+
+    void appendElement(const SendReceiveElement&& element);
 };
 
 #endif // SENDRECEIVELISTMODEL_H

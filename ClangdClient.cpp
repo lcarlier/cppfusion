@@ -20,13 +20,13 @@
 #include "ClangdClient.hpp"
 #include "QFileRAII.hpp"
 
-ClangdClient::ClangdClient(ClangdProject clangdProject_p, QObject *parent) : QObject{parent}, clangdProject{std::move(clangdProject_p)}, clangdThread{}, clangdWorker{clangdProject}, curId{0}
+ClangdClient::ClangdClient(ClangdProject clangdProject_p, QObject *parent) : QObject{parent}, clangdProject{std::move(clangdProject_p)}, clangdThread{}, clangdWorker{clangdProject}
 {
     clangdWorker.moveToThread(&clangdThread);
     connect(this, &ClangdClient::startClangd, &clangdWorker, &cppfusion::priv::ClangdWorker::startClangd);
     connect(this, &ClangdClient::commandSent, &clangdWorker, &cppfusion::priv::ClangdWorker::writeDataToProcess, Qt::QueuedConnection);
     connect(&clangdWorker, &cppfusion::priv::ClangdWorker::emitLog, this, &ClangdClient::forwardEmitLog, Qt::QueuedConnection);
-    connect(&clangdWorker, &cppfusion::priv::ClangdWorker::messageReceived, this, &ClangdClient::forwardMessageReceived, Qt::QueuedConnection);
+    connect(&clangdWorker, &cppfusion::priv::ClangdWorker::messageReceived, this, &ClangdClient::processMessageReceived, Qt::QueuedConnection);
     connect(&clangdWorker, &cppfusion::priv::ClangdWorker::clangdStarted, this, &ClangdClient::clangdStarted, Qt::QueuedConnection);
     clangdThread.setObjectName("ClangThread");
     clangdThread.start();
@@ -34,115 +34,264 @@ ClangdClient::ClangdClient(ClangdProject clangdProject_p, QObject *parent) : QOb
 }
 using JsonKeyVal = std::pair<QString, QJsonValue>;
 
-static QJsonObject getMessage(QString method, std::initializer_list<JsonKeyVal> params)
+static inline QJsonObject getMessage()
 {
     static JsonKeyVal jsonRpc{"jsonrpc", "2.0"};
-    return QJsonObject{jsonRpc,
-                       {"method", method},
-                       {"params", QJsonObject{params}}};
+    return QJsonObject{jsonRpc};
+}
+
+static inline QJsonObject getMessage(QString method)
+{
+    QJsonObject rv = getMessage();
+    rv["method"] = method;
+    return rv;
+}
+
+static inline QJsonObject getMessage(QString method, std::initializer_list<JsonKeyVal> params)
+{
+    QJsonObject rv = getMessage(method);
+    rv["params"] = QJsonObject{params};
+    return rv;
 }
 
 void ClangdClient::initServer()
 {
-    QJsonObject textDocumentCapabilities{
-                                         {"synchronization", QJsonObject{{"dynamicRegistration", true},
-                                                                         {"willSave", true},
-                                                                         {"willSaveWaitUntil", true},
-                                                                         {"didSave", true}}},
-                                         {"completion",
-                                          QJsonObject{
-                                                      {"dynamicRegistration", true},
-                                                      {"completionItem", QJsonObject{{"snippetSupport", true},
-                                                                                     {"commitCharactersSupport", true},
-                                                                                     {"documentationFormat",
-                                                                                      QJsonArray{"markdown", "plaintext"}},
-                                                                                     {"deprecatedSupport", true},
-                                                                                     {"preselectSupport", true}}},
-                                                      {"contextSupport", true}}},
-                                         {"hover",
-                                          QJsonObject{{"dynamicRegistration", true},
-                                                      {"contentFormat", QJsonArray{"markdown", "plaintext"}}}},
-                                         {"signatureHelp",
-                                          QJsonObject{{"dynamicRegistration", true},
-                                                      {"signatureInformation",
-                                                       QJsonObject{{"documentationFormat",
-                                                                    QJsonArray{"markdown", "plaintext"}},
-                                                                   {"parameterInformation",
-                                                                    QJsonObject{{"labelOffsetSupport", true}}}}}}},
-                                         {"references", QJsonObject{{"dynamicRegistration", true}}},
-                                         {"documentSymbol",
-                                          QJsonObject{
-                                                      {"dynamicRegistration", true},
-                                                      {"symbolKind",
-                                                       QJsonObject{{"valueSet",
-                                                                    QJsonArray{1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
-                                                                               12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26}}}}}},
-                                         {"workspaceSymbol", QJsonObject{{"dynamicRegistration", true}}},
-                                         {"codeAction",
-                                          QJsonObject{
-                                                      {"dynamicRegistration", true},
-                                                      {"codeActionLiteralSupport",
-                                                       QJsonObject{
-                                                                   {"codeActionKind",
-                                                                    QJsonObject{{"valueSet",
-                                                                                 QJsonArray{"empty", "quickfix", "refactor",
-                                                                                            "refactor.extract", "refactor.inline",
-                                                                                            "refactor.rewrite", "source",
-                                                                                            "source.organizeImports"}}}}}}}},
-                                         {"codeLens", QJsonObject{{"dynamicRegistration", true}}},
-                                         {"documentLink", QJsonObject{{"dynamicRegistration", true}}},
-                                         {"colorProvider", QJsonObject{{"dynamicRegistration", true}}},
-                                         {"rename", QJsonObject{{"dynamicRegistration", true},
-                                                                {"prepareSupportDefaultBehavior", true}}}};
-
-    QJsonObject workspaceCapabilities{
-                                      {"applyEdit", true},
-                                      {"workspaceEdit", QJsonObject{{"documentChanges", true}}},
-                                      {"didChangeConfiguration", QJsonObject{{"dynamicRegistration", true}}},
-                                      {"didChangeWatchedFiles", QJsonObject{{"dynamicRegistration", true}}},
-                                      {"symbol", QJsonObject{{"dynamicRegistration", true}}},
-                                      {"executeCommand", QJsonObject{{"dynamicRegistration", true}}}};
-
-    QJsonObject windowCapabilities{
-                                   {"showMessage", QJsonObject{{"dynamicRegistration", true}}},
-                                   {"showMessageRequest", QJsonObject{{"dynamicRegistration", true}}},
-                                   {"logMessage", QJsonObject{{"dynamicRegistration", true}}}};
-
-    QJsonObject capabilities{{"textDocument", textDocumentCapabilities},
-                             {"workspace", workspaceCapabilities},
-                             {"window", windowCapabilities}};
-
-    /*QJsonArray workspaceFolders{
-                                QJsonObject{{"uri", "file:///home/lcarlier/Projects/cpp/EasyMock"},
-                                            {"name", "EasyMock"}}};*/
-
-    QJsonObject params{{"processId", QCoreApplication::applicationPid()},
-                       {"rootUri", "file://" + clangdProject.projectRoot},
-                       {"capabilities", capabilities},
-                       {"initializationOptions", QJsonObject()},
-                       {"trace", "off"}/*,
-                       {"workspaceFolders", workspaceFolders}*/};
-
-    QJsonObject init_message_json{{"jsonrpc", "2.0"},
-                                  {"id", 0},
-                                  {"method", "initialize"},
-                                  {"params", params}};
+    QString init_message = R"JSON({
+    "jsonrpc": "2.0",
+    "method": "initialize",
+    "params": {
+        "capabilities": {
+            "textDocument": {
+                "callHierarchy": {
+                    "dynamicRegistration": true
+                },
+                "codeAction": {
+                    "codeActionLiteralSupport": {
+                        "codeActionKind": {
+                            "valueSet": [
+                                "*"
+                            ]
+                        }
+                    }
+                },
+                "completion": {
+                    "completionItem": {
+                        "commitCharacterSupport": true,
+                        "snippetSupport": false
+                    },
+                    "completionItemKind": {
+                        "valueSet": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            17,
+                            18,
+                            19,
+                            20,
+                            21,
+                            22,
+                            23,
+                            24,
+                            25
+                        ]
+                    },
+                    "dynamicRegistration": true,
+                    "editsNearCursor": true
+                },
+                "definition": {
+                    "dynamicRegistration": true
+                },
+                "documentSymbol": {
+                    "hierarchicalDocumentSymbolSupport": true,
+                    "symbolKind": {
+                        "valueSet": [
+                            1,
+                            2,
+                            3,
+                            4,
+                            5,
+                            6,
+                            7,
+                            8,
+                            9,
+                            10,
+                            11,
+                            12,
+                            13,
+                            14,
+                            15,
+                            16,
+                            17,
+                            18,
+                            19,
+                            20,
+                            21,
+                            22,
+                            23,
+                            24,
+                            25,
+                            26
+                        ]
+                    },
+                    "tagSupport": {
+                        "valueSet": [
+                            1
+                        ]
+                    }
+                },
+                "formatting": {
+                    "dynamicRegistration": true
+                },
+                "hover": {
+                    "contentFormat": [
+                        "markdown",
+                        "plaintext"
+                    ],
+                    "dynamicRegistration": true
+                },
+                "implementation": {
+                    "dynamicRegistration": true
+                },
+                "inactiveRegionsCapabilities": {
+                    "inactiveRegions": true
+                },
+                "onTypeFormatting": {
+                    "dynamicRegistration": true
+                },
+                "publishDiagnostics": {
+                    "categorySupport": true,
+                    "codeActionsInline": true
+                },
+                "rangeFormatting": {
+                    "dynamicRegistration": true
+                },
+                "references": {
+                    "dynamicRegistration": true
+                },
+                "rename": {
+                    "dynamicRegistration": true,
+                    "prepareSupport": true
+                },
+                "semanticTokens": {
+                    "dynamicRegistration": true,
+                    "formats": [
+                        "relative"
+                    ],
+                    "requests": {
+                        "full": {
+                            "delta": true
+                        }
+                    },
+                    "tokenModifiers": [
+                        "declaration",
+                        "definition"
+                    ],
+                    "tokenTypes": [
+                        "type",
+                        "class",
+                        "enumMember",
+                        "typeParameter",
+                        "parameter",
+                        "variable",
+                        "function",
+                        "macro",
+                        "keyword",
+                        "comment",
+                        "string",
+                        "number",
+                        "operator"
+                    ]
+                },
+                "signatureHelp": {
+                    "dynamicRegistration": true,
+                    "signatureInformation": {
+                        "activeParameterSupport": true,
+                        "documentationFormat": [
+                            "markdown",
+                            "plaintext"
+                        ]
+                    }
+                },
+                "synchronization": {
+                    "didSave": true,
+                    "dynamicRegistration": true,
+                    "willSave": true,
+                    "willSaveWaitUntil": false
+                },
+                "typeDefinition": {
+                    "dynamicRegistration": true
+                },
+                "typeHierarchy": {
+                    "dynamicRegistration": true
+                }
+            },
+            "window": {
+                "workDoneProgress": true
+            },
+            "workspace": {
+                "applyEdit": true,
+                "configuration": true,
+                "didChangeConfiguration": {
+                    "dynamicRegistration": true
+                },
+                "executeCommand": {
+                    "dynamicRegistration": true
+                },
+                "semanticTokens": {
+                    "refreshSupport": true
+                },
+                "workspaceEdit": {
+                    "documentChanges": true,
+                    "resourceOperations": [
+                        "create",
+                        "rename",
+                        "delete"
+                    ]
+                },
+                "workspaceFolders": true
+            }
+        },
+        "clientInfo": {
+            "name": "Qt Creator",
+            "version": "14.0.1"
+        },
+        "initializationOptions": {
+        },
+        "trace": "verbose"
+    }
+})JSON";
+    QJsonObject init_message_obj = QJsonDocument::fromJson(init_message.toUtf8()).object();
+    auto params = init_message_obj["params"].toObject();
+    params["id"] = QUuid::createUuid().toString();
+    params["processId"] = QCoreApplication::applicationPid();
+    params["rootUri"] = "file://" + clangdProject.projectRoot;
+    params["workspaceFolders"] = QJsonArray{QJsonObject{{"name", "ProjectName"},{"uri","file://" + clangdProject.projectRoot}}};
+    init_message_obj["params"] = std::move(params);
 
     // Create QJsonDocument
-    QJsonDocument init_message_doc(init_message_json);
+    QJsonDocument init_message_doc(std::move(init_message_obj));
 
     QMutex mutex;
     QWaitCondition condition;
     sendData(init_message_doc, true, [this, &mutex, &condition](const QJsonDocument&)
              {
                  QMutexLocker locker(&mutex);
-                 QJsonObject initialized_message_json{{"jsonrpc", "2.0"},
-                                                      {"method", "initialized"},
-                                                      {"params", QJsonObject{}}};
 
                  // Create QJsonDocument
-                 QJsonDocument initialized_message_doc(initialized_message_json);
-                 sendData(initialized_message_doc, false);
+                 sendData(QJsonDocument{getMessage("initialized", {})}, false);
                  condition.wakeAll();
              });
     QMutexLocker locker(&mutex);
@@ -227,9 +376,19 @@ void ClangdClient::clangdStarted()
     }
 }
 
-void ClangdClient::forwardMessageReceived(QJsonDocument document)
+void ClangdClient::processMessageReceived(QJsonDocument document)
 {
     emit messageReceived(document);
+    const auto& document_object = document.object();
+    const QString& method = document_object["method"].toString();
+    if(method == "window/workDoneProgress/create")
+    {
+        QJsonObject answer = getMessage();
+        answer["id"] = document_object["id"].toInt();
+        answer["result"] = QJsonValue::Null;
+        sendData(QJsonDocument{std::move(answer)}, false, std::nullopt);
+    }
+
 }
 void ClangdClient::forwardEmitLog(QString stringToLog)
 {
@@ -240,6 +399,7 @@ void ClangdClient::sendData(const QJsonDocument &jsonData, bool useId, std::opti
     if (!jsonData.isEmpty()) {
         QJsonDocument finalMessage = getFinalMessage(jsonData, useId);
 
+        emit messageSent(jsonData);
         emit commandSent(finalMessage, callback);
     }
 }
@@ -248,12 +408,10 @@ QJsonDocument ClangdClient::getFinalMessage(const QJsonDocument& jsonData, bool 
 {
     QJsonObject jsonObject = jsonData.object();
     if (useId) {
-        jsonObject["id"] = curId;
-        curId++;
+        jsonObject["id"] = QUuid::createUuid().toString();
     }
     QJsonDocument doc(jsonObject);
 
     // responseArea->appendPlainText("sending\n" + finalMessage);
-    emit messageSent(doc);
     return doc;
 }

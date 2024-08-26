@@ -140,55 +140,75 @@ signals:
 private slots:
     // Slot to handle standard output
     void handleReadyReadStandardOutput() {
-        if(byteToRead == 0)
+        clangd.setReadChannel(QProcess::StandardOutput);
+        while(clangd.canReadLine() || byteToRead != 0)
         {
-            QString firstLine = clangd.readLine();
-            QString threadIdStr = QString::number(reinterpret_cast<quintptr>(QThread::currentThreadId()));
-            emit emitLog(QString{"TID: "} + threadIdStr + QString(" received") + "\n" + firstLine);
-            static const QString CONTENT_LENGTH_REGEX_STR =
-                R"(Content-Length: (\d+).*)";
-            static const QRegularExpression CONTENT_LENGTH_REGEX(
-                CONTENT_LENGTH_REGEX_STR);
-            QRegularExpressionMatch match = CONTENT_LENGTH_REGEX.match(firstLine);
-            if (match.hasMatch())
+            if(byteToRead == 0)
             {
-                byteToRead = match.captured(1).toLongLong();
+                QString firstLine = clangd.readLine();
+                QString threadIdStr = QString::number(reinterpret_cast<quintptr>(QThread::currentThreadId()));
+                emit emitLog(QString{"TID: "} + threadIdStr + QString(" received") + "\n" + firstLine);
+                qDebug() << "first line received: " << firstLine;
+                static const QString CONTENT_LENGTH_REGEX_STR =
+                    R"(Content-Length: (\d+).*)";
+                static const QRegularExpression CONTENT_LENGTH_REGEX(
+                    CONTENT_LENGTH_REGEX_STR);
+                QRegularExpressionMatch match = CONTENT_LENGTH_REGEX.match(firstLine);
+                if (match.hasMatch())
+                {
+                    byteToRead = match.captured(1).toLongLong();
+                    // skip empty line
+                    clangd.readLine();
+                }
+                else
+                {
+                    emit emitLog(QString{"Wrong receive first line\n"} + firstLine);
+                    continue;
+                }
             }
-            // skip empty line
-            clangd.readLine();
-        }
 
-        {
-            const QString curOut = clangd.read(byteToRead);
-            const auto nbByteRead = curOut.size();
-            byteToRead -= nbByteRead;
-            totalOut += curOut;
-            if(byteToRead > 0)
             {
-                emit emitLog("Partial read of " + QString::number(nbByteRead));
+                const QString curOut = clangd.read(byteToRead);
+                qDebug() << "Reading data " << byteToRead << " bytes\n";
+                const auto nbByteRead = curOut.size();
+                if(nbByteRead == 0)
+                {
+                    qDebug() << "No more bytes to read. Returning and waiting for future signals...";
+                    emit emitLog("No more bytes to read. Returning and waiting for future signals...");
+                    return;
+                }
+                byteToRead -= nbByteRead;
+                totalOut += curOut;
+                if(byteToRead > 0)
+                {
+                    qDebug() << "Partial read of " + QString::number(nbByteRead);
+                    emit emitLog("Partial read of " + QString::number(nbByteRead));
+                }
             }
-        }
 
-        if(byteToRead == 0)
-        {
-            QJsonDocument jsonDocument = QJsonDocument::fromJson(totalOut.toUtf8());
-            emit messageReceived(jsonDocument);
-            emit emitLog(jsonDocument.toJson(QJsonDocument::Indented));
-            const QString id = getId(jsonDocument);
-            if(auto idx = curCallBack.find(id); idx != curCallBack.end())
+            if(byteToRead == 0)
             {
-                (idx->second)(jsonDocument);
-                curCallBack.erase(idx);
+                QJsonDocument jsonDocument = QJsonDocument::fromJson(totalOut.toUtf8());
+                emit messageReceived(jsonDocument);
+                emit emitLog(jsonDocument.toJson(QJsonDocument::Indented));
+                const QString id = getId(jsonDocument);
+                if(auto idx = curCallBack.find(id); idx != curCallBack.end())
+                {
+                    (idx->second)(jsonDocument);
+                    curCallBack.erase(idx);
+                }
+                totalOut.clear();
             }
-            totalOut.clear();
         }
     }
 
     // Slot to handle standard error
     void handleReadyReadStandardError() {
+        clangd.setReadChannel(QProcess::StandardError);
         QByteArray output = clangd.readAllStandardError();
         QString error {"Error: "};
         error += QString{output};
+        qDebug() << "from stdErr:\n" << output;
         emit emitLog(error);
     }
 
@@ -226,12 +246,11 @@ private:
     ClangdProject clangdProject;
     QThread clangdThread;
     cppfusion::priv::ClangdWorker clangdWorker;
-    int curId;
 
 
 private slots:
     void clangdStarted();
-    void forwardMessageReceived(QJsonDocument document);
+    void processMessageReceived(QJsonDocument document);
     void forwardEmitLog(QString stringToLog);
 signals:
     void startClangd();
