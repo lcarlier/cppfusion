@@ -19,6 +19,7 @@
 
 #include "ClangdClient.hpp"
 #include "QFileRAII.hpp"
+#include "JsonHelper.hpp"
 
 ClangdClient::ClangdClient(ClangdProject clangdProject_p, QObject *parent) : QObject{parent}, clangdProject{std::move(clangdProject_p)}, clangdThread{}, clangdWorker{clangdProject}
 {
@@ -371,8 +372,8 @@ void ClangdClient::clangdStarted()
     {
         QFileRAII compileCommands{clangdProject.compileCommandJson};
         QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
-        QString firstFile = compileCommandsJson[0]["file"].toString();
-        addFileToDatabse(firstFile);
+        const QJsonObject& firstObject = compileCommandsJson[0].toObject();
+        addFileToDatabse(getFullPathFromCompileCommandElement(firstObject));
     }
 }
 

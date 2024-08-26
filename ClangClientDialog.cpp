@@ -7,17 +7,29 @@
 #include <QTextCursor>
 #include <QLineEdit>
 #include <QTableWidgetItem>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QDir>
 
 #include "ClangClientDialog.hpp"
 
 #include "ui_ClangClientDialog.h"
 
 #include "JsonTreeModel.hpp"
+#include "QFileRAII.hpp"
+#include "JsonHelper.hpp"
+
+static inline
+    auto enumerate(const auto& data) {
+    return data | std::views::transform([i = 0](const auto& value) mutable {
+               return std::make_pair(i++, value);
+           });
+}
 
 ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *parent)
     : QDialog(parent),
     ui(new Ui::ClangClientDialog),
-    clangdClient{std::move(clangdProject), this},
+    clangdClient{clangdProject, this},
     sendReceivedModel{this},
     lastSearchText{},
     startQuerySymbolTimer{this}{
@@ -55,6 +67,20 @@ ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *paren
 
     startQuerySymbolTimer.setSingleShot(true);
     connect(&startQuerySymbolTimer, &QTimer::timeout, this, &ClangClientDialog::onStartQuerySymbolTimerExpired);
+
+    ui->fileTableWidget->setColumnCount(1);
+    {
+        QFileRAII compileCommands{clangdProject.compileCommandJson};
+        const QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
+        const QJsonArray& jsonArray = compileCommandsJson.array();
+        ui->fileTableWidget->setRowCount(jsonArray.size());
+        for(const auto& [i, elem] : enumerate(jsonArray))
+        {
+            const QJsonObject& curObject = elem.toObject();
+            ui->fileTableWidget->setItem(i, 0, new QTableWidgetItem(getFullPathFromCompileCommandElement(curObject)));
+        }
+        ui->fileTableWidget->resizeColumnsToContents();
+    }
 }
 
 void ClangClientDialog::addToRawLog(QString stringToLog) {
@@ -150,12 +176,6 @@ void ClangClientDialog::findPrevious() {
             QMessageBox::information(this, tr("Find"), tr("The text was not found."));
         }
     }
-}
-
-auto enumerate(const auto& data) {
-    return data | std::views::transform([i = 0](const auto& value) mutable {
-               return std::make_pair(i++, value);
-           });
 }
 
 void ClangClientDialog::onStartQuerySymbolTimerExpired()

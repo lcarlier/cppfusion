@@ -10,7 +10,7 @@ class QFileRAII {
 public:
     QFileRAII(const QString& filePath) : file(filePath) {
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            qDebug() << "Failed to open file:" << file.errorString();
+            qDebug() << "Failed to open file " << filePath << ": " << file.errorString();
         }
     }
 
