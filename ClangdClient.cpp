@@ -278,8 +278,7 @@ void ClangdClient::initServer()
     auto params = init_message_obj["params"].toObject();
     params["id"] = QUuid::createUuid().toString();
     params["processId"] = QCoreApplication::applicationPid();
-    params["rootUri"] = "file://" + clangdProject.projectRoot;
-    params["workspaceFolders"] = QJsonArray{QJsonObject{{"name", "ProjectName"},{"uri","file://" + clangdProject.projectRoot}}};
+    params["workspaceFolders"] = QJsonArray{QJsonObject{{"name", "ProjectName"},{"uri",QUrl::fromLocalFile(clangdProject.projectRoot).toString()}}};
     init_message_obj["params"] = std::move(params);
 
     // Create QJsonDocument
@@ -302,7 +301,7 @@ void ClangdClient::initServer()
 void ClangdClient::addFileToDatabse(QString path)
 {
 
-    QString uri = "file://" + path;
+    QString uri = QUrl::fromLocalFile(path).toString();
     {
         QFileRAII file{path};
         QString content = file.readAll();
