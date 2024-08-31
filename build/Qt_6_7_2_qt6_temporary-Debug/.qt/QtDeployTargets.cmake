@@ -1,0 +1,2 @@
+set(__QT_DEPLOY_TARGET_CppFusion_FILE /home/lcarlier/Projects/cpp/cppfusion/build/Qt_6_7_2_qt6_temporary-Debug/CppFusion)
+set(__QT_DEPLOY_TARGET_CppFusion_TYPE EXECUTABLE)

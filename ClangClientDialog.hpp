@@ -9,6 +9,7 @@
 #include <QItemSelection>
 #include <QTextCharFormat>
 #include <QTimer>
+#include <QPoint>
 
 #include "ClangdClient.hpp"
 #include "SendReceiveListModel.hpp"
@@ -46,4 +47,5 @@ private slots:
     void showFindDialog();
     void onStartQuerySymbolTimerExpired();
     void onSymbolSearchTextChanged(const QString &text);
+    void onOpenCloseRightClick(const QPoint &pos);
 };

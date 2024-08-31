@@ -16,6 +16,7 @@
 #include <QMutexLocker>
 #include <QCoreApplication>
 #include <QMessageBox>
+#include <QDir>
 
 #include "ClangdClient.hpp"
 #include "QFileRAII.hpp"
@@ -279,6 +280,8 @@ void ClangdClient::initServer()
     params["id"] = QUuid::createUuid().toString();
     params["processId"] = QCoreApplication::applicationPid();
     params["workspaceFolders"] = QJsonArray{QJsonObject{{"name", "ProjectName"},{"uri",QUrl::fromLocalFile(clangdProject.projectRoot).toString()}}};
+    QFileInfo compileCommands{clangdProject.compileCommandJson};
+    params["initializationOptions"] = QJsonObject{{"compilationDatabasePath", compileCommands.dir().absolutePath()}};
     init_message_obj["params"] = std::move(params);
 
     // Create QJsonDocument
@@ -291,7 +294,7 @@ void ClangdClient::initServer()
                  QMutexLocker locker(&mutex);
 
                  // Create QJsonDocument
-                 sendData(QJsonDocument{getMessage("initialized", {})}, false);
+                 sendData(QJsonDocument{getMessage("initialized")}, false);
                  condition.wakeAll();
              });
     QMutexLocker locker(&mutex);
@@ -300,8 +303,13 @@ void ClangdClient::initServer()
 
 void ClangdClient::addFileToDatabse(QString path)
 {
+    this->openFile(path);
+    this->closeFile(path);
+}
 
-    QString uri = QUrl::fromLocalFile(path).toString();
+void ClangdClient::openFile(const QString& path)
+{
+    const QString uri = QUrl::fromLocalFile(path).toString();
     {
         QFileRAII file{path};
         QString content = file.readAll();
@@ -316,6 +324,10 @@ void ClangdClient::addFileToDatabse(QString path)
                                          }});
         sendData(QJsonDocument{message}, false);
     }
+}
+void ClangdClient::closeFile(const QString& path)
+{
+    const QString uri = QUrl::fromLocalFile(path).toString();
     {
         QJsonObject message = getMessage("textDocument/didClose",
                                          {{"textDocument",
@@ -325,7 +337,6 @@ void ClangdClient::addFileToDatabse(QString path)
                                          }});
         sendData(QJsonDocument{message}, false);
     }
-
 }
 
 static SymbolInfo::Position getPosition(const QJsonObject& obj)

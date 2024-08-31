@@ -123,7 +123,7 @@ public slots:
 
         clangd.setProgram(clangdProject.clangdPath);
         QFileInfo compileCommands{clangdProject.compileCommandJson};
-        clangd.setArguments({"--offset-encoding=utf-8", "--compile-commands-dir=" + compileCommands.absolutePath(), "--log=verbose"});
+        clangd.setArguments({"--offset-encoding=utf-8", "--compile-commands-dir=" + compileCommands.absolutePath(), "--log=verbose", "--background-index"});
         clangd.start();
         clangd.waitForStarted();
 
@@ -236,6 +236,8 @@ public:
     }
     void initServer();
     void addFileToDatabse(QString path);
+    void openFile(const QString& path);
+    void closeFile(const QString& path);
     std::vector<SymbolInfo> querySymbol(QString symbol, double limit = 10000);
 
 private:

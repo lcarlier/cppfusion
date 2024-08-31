@@ -1,0 +1,4 @@
+/home/lcarlier/Projects/cpp/cppfusion/build/Qt_6_7_2_qt6_temporary-Debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
+/home/lcarlier/Projects/cpp/cppfusion/build/Qt_6_7_2_qt6_temporary-Debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
+/home/lcarlier/Projects/cpp/cppfusion/build/Qt_6_7_2_qt6_temporary-Debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
+/home/lcarlier/Projects/cpp/cppfusion/build/Qt_6_7_2_qt6_temporary-Debug/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir

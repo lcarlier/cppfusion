@@ -11,6 +11,8 @@
 #include <QJsonArray>
 #include <QDir>
 #include <QString>
+#include <QMenu>
+#include <QAction>
 
 #include "ClangClientDialog.hpp"
 
@@ -19,6 +21,9 @@
 #include "JsonTreeModel.hpp"
 #include "QFileRAII.hpp"
 #include "JsonHelper.hpp"
+
+static QString CLOSED_FILED{"closed"};
+static QString OPENED_FILED{"open"};
 
 static inline
     auto enumerate(const auto& data) {
@@ -69,7 +74,9 @@ ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *paren
     startQuerySymbolTimer.setSingleShot(true);
     connect(&startQuerySymbolTimer, &QTimer::timeout, this, &ClangClientDialog::onStartQuerySymbolTimerExpired);
 
-    ui->fileTableWidget->setColumnCount(2);
+    static QStringList headers({"Uri", "State"});
+    ui->fileTableWidget->setColumnCount(headers.size());
+    ui->fileTableWidget->setHorizontalHeaderLabels(headers);
     {
         QFileRAII compileCommands{clangdProject.compileCommandJson};
         const QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
@@ -79,10 +86,12 @@ ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *paren
         {
             const QJsonObject& curObject = elem.toObject();
             ui->fileTableWidget->setItem(i, 0, new QTableWidgetItem{getFullPathFromCompileCommandElement(curObject)});
-            ui->fileTableWidget->setItem(i, 1, new QTableWidgetItem{QString{"closed"}});
+            ui->fileTableWidget->setItem(i, 1, new QTableWidgetItem{CLOSED_FILED});
         }
         ui->fileTableWidget->resizeColumnsToContents();
     }
+    ui->fileTableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->fileTableWidget, &QWidget::customContextMenuRequested, this, &ClangClientDialog::onOpenCloseRightClick);
 }
 
 void ClangClientDialog::addToRawLog(QString stringToLog) {
@@ -214,6 +223,49 @@ void ClangClientDialog::onSymbolSearchTextChanged(const QString &/*text*/)
     ui->symbolTableWidget->setRowCount(0);
     ui->symbolTableWidget->setColumnCount(0);
     startQuerySymbolTimer.start(200);
+}
+
+void ClangClientDialog::onOpenCloseRightClick(const QPoint &pos)
+{
+    // Map the point to the global position
+    const QPoint globalPos = ui->fileTableWidget->viewport()->mapToGlobal(pos);
+    const QTableWidgetItem *item = ui->fileTableWidget->itemAt(pos);
+
+    if(item) {
+        // Create a context menu
+        QMenu contextMenu;
+
+        int row = item->row();
+
+        QTableWidgetItem *status = ui->fileTableWidget->item(row, 1);
+        const bool canOpen = status->text() == CLOSED_FILED;
+        QAction* curAction;
+        if(canOpen)
+        {
+            curAction = contextMenu.addAction("Open");
+        }
+        else
+        {
+            curAction = contextMenu.addAction("Close");
+        }
+
+        QAction* selectedAction = contextMenu.exec(globalPos);
+
+        if(selectedAction == curAction)
+        {
+            const QString pathToFile = ui->fileTableWidget->item(row, 0)->text();
+            if(canOpen)
+            {
+                clangdClient.openFile(pathToFile);
+                status->setText(OPENED_FILED);
+            }
+            else
+            {
+                clangdClient.closeFile(pathToFile);
+                status->setText(CLOSED_FILED);
+            }
+        }
+    }
 }
 
 void ClangClientDialog::clearHighlights() {
