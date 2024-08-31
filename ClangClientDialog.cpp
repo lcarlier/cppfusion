@@ -182,10 +182,14 @@ void ClangClientDialog::findPrevious() {
 
 void ClangClientDialog::onStartQuerySymbolTimerExpired()
 {
-    const QString& text = ui->symbolSearchLineEdit->text();
+    QString text = ui->symbolSearchLineEdit->text();
     if(text.isEmpty())
     {
         return;
+    }
+    if(text == " ")
+    {
+        text.clear();
     }
     static QStringList headers({"Name", "Kind", "File URI", "Start", "End", "Score"});
     const std::vector<SymbolInfo> v = clangdClient.querySymbol(text);
