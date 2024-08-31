@@ -400,7 +400,7 @@ void ClangdClient::sendData(const QJsonDocument &jsonData, bool useId, std::opti
     if (!jsonData.isEmpty()) {
         QJsonDocument finalMessage = getFinalMessage(jsonData, useId);
 
-        emit messageSent(jsonData);
+        emit messageSent(finalMessage);
         emit commandSent(finalMessage, callback);
     }
 }
