@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QDir>
+#include <QString>
 
 #include "ClangClientDialog.hpp"
 
@@ -68,7 +69,7 @@ ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *paren
     startQuerySymbolTimer.setSingleShot(true);
     connect(&startQuerySymbolTimer, &QTimer::timeout, this, &ClangClientDialog::onStartQuerySymbolTimerExpired);
 
-    ui->fileTableWidget->setColumnCount(1);
+    ui->fileTableWidget->setColumnCount(2);
     {
         QFileRAII compileCommands{clangdProject.compileCommandJson};
         const QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
@@ -77,7 +78,8 @@ ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *paren
         for(const auto& [i, elem] : enumerate(jsonArray))
         {
             const QJsonObject& curObject = elem.toObject();
-            ui->fileTableWidget->setItem(i, 0, new QTableWidgetItem(getFullPathFromCompileCommandElement(curObject)));
+            ui->fileTableWidget->setItem(i, 0, new QTableWidgetItem{getFullPathFromCompileCommandElement(curObject)});
+            ui->fileTableWidget->setItem(i, 1, new QTableWidgetItem{QString{"closed"}});
         }
         ui->fileTableWidget->resizeColumnsToContents();
     }
