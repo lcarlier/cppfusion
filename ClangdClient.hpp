@@ -235,7 +235,6 @@ public:
         }
     }
     void initServer();
-    void addFileToDatabse(QString path);
     void openFile(const QString& path);
     void closeFile(const QString& path);
     std::vector<SymbolInfo> querySymbol(QString symbol, double limit = 10000);

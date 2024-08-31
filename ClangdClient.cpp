@@ -299,12 +299,20 @@ void ClangdClient::initServer()
              });
     QMutexLocker locker(&mutex);
     condition.wait(&mutex);
-}
 
-void ClangdClient::addFileToDatabse(QString path)
-{
-    this->openFile(path);
-    this->closeFile(path);
+    /*
+     * We need to open and close one file so that clangd starts indexing...
+     *
+     * https://github.com/clangd/clangd/discussions/1341
+     */
+    {
+        QFileRAII compileCommands{clangdProject.compileCommandJson};
+        QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
+        const QJsonObject& firstObject = compileCommandsJson[0].toObject();
+        const QString firstFile = getFullPathFromCompileCommandElement(firstObject);
+        openFile(firstFile);
+        closeFile(firstFile);
+    }
 }
 
 void ClangdClient::openFile(const QString& path)
@@ -379,12 +387,6 @@ std::vector<SymbolInfo> ClangdClient::querySymbol(QString symbol, double limit)
 void ClangdClient::clangdStarted()
 {
     initServer();
-    {
-        QFileRAII compileCommands{clangdProject.compileCommandJson};
-        QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
-        const QJsonObject& firstObject = compileCommandsJson[0].toObject();
-        addFileToDatabse(getFullPathFromCompileCommandElement(firstObject));
-    }
 }
 
 void ClangdClient::processMessageReceived(QJsonDocument document)
