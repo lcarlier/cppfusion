@@ -23,15 +23,14 @@ class ClangClientDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit ClangClientDialog(ClangdProject clangdProject, QWidget *parent = nullptr);
+    explicit ClangClientDialog(ClangdClient& clangdClient, const ClangdProject& clangdProject, QWidget *parent = nullptr);
     ~ClangClientDialog();
-    ClangdClient& getClangdClient() { return clangdClient; }
 public slots:
     void addToRawLog(QString stringToLog);
 
 private:
     std::unique_ptr<Ui::ClangClientDialog> ui;
-    ClangdClient clangdClient;
+    ClangdClient& clangdClient;
     SendReceiveListModel sendReceivedModel;
     QString lastSearchText;
     QTimer startQuerySymbolTimer;

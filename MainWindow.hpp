@@ -6,6 +6,7 @@
 #include <QMainWindow>
 
 #include "ClangClientDialog.hpp"
+#include "ClangdClient.hpp"
 #include "ProjectModel.hpp"
 
 QT_BEGIN_NAMESPACE
@@ -23,10 +24,12 @@ public:
     ~MainWindow();
 
 private:
-    std::unique_ptr<Ui::MainWindow> ui;
+    // Store the QObject based in unique_ptr because they are not moveable or copyable
+    std::unique_ptr<ClangdClient> clangdClient;
     std::unique_ptr<ClangClientDialog> clientDialog;
     std::unique_ptr<ProjectModel> projectModel;
     std::unique_ptr<ExtensionFilterProxyModel> projectModelFilter;
+    std::unique_ptr<Ui::MainWindow> ui; // Must be last to make sure that all the objects are deleted before the UI
 private slots:
     void showOpenProject(bool trigger = false);
     void showClangDebugDialog(bool triggered = false);

@@ -225,7 +225,7 @@ class ClangdClient : public QObject
 {
     Q_OBJECT
 public:
-    explicit ClangdClient(ClangdProject clangdProject, QObject *parent = nullptr);
+    ClangdClient(ClangdProject clangdProject, QObject *parent = nullptr);
     ~ClangdClient()
     {
         if(clangdThread.isRunning())

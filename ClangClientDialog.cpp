@@ -32,10 +32,10 @@ static inline
            });
 }
 
-ClangClientDialog::ClangClientDialog(ClangdProject clangdProject, QWidget *parent)
+ClangClientDialog::ClangClientDialog(ClangdClient& clangdClient_p, const ClangdProject& clangdProject, QWidget *parent)
     : QDialog(parent),
     ui(new Ui::ClangClientDialog),
-    clangdClient{clangdProject, this},
+    clangdClient{clangdClient_p},
     sendReceivedModel{this},
     lastSearchText{},
     startQuerySymbolTimer{this}{

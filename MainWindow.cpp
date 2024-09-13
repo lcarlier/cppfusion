@@ -7,7 +7,7 @@
 #include "OpenProject.hpp"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow), clientDialog{nullptr} {
+    : QMainWindow(parent), clientDialog{nullptr}, ui(new Ui::MainWindow) {
     ui->setupUi(this);
 
     connect(ui->actionShow_Clang_Debug, &QAction::triggered, this,
@@ -34,7 +34,8 @@ void MainWindow::showOpenProject(bool /*triggered*/)
             ui->treeViewProject->hideColumn(2);
             ui->treeViewProject->hideColumn(3);
         }
-        clientDialog.reset(new ClangClientDialog{std::move(clangdProject), this});
+        clangdClient.reset(new ClangdClient{clangdProject, this});
+        clientDialog.reset(new ClangClientDialog{*clangdClient, clangdProject, this});
         clientDialog->setWindowFlags(clientDialog->windowFlags() | Qt::WindowMaximizeButtonHint | Qt::Window);
     }
 }
