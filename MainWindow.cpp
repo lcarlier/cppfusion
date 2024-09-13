@@ -24,6 +24,16 @@ void MainWindow::showOpenProject(bool /*triggered*/)
     if(result == OpenProject::Accepted)
     {
         ClangdProject clangdProject = openProject.getClangdProject();
+        {
+            projectModel.reset(new ProjectModel{clangdProject, ui->treeViewProject});
+            projectModelFilter.reset(new ExtensionFilterProxyModel{clangdProject});
+            projectModelFilter->setSourceModel(projectModel.get());
+            ui->treeViewProject->setModel(projectModelFilter.get());
+            ui->treeViewProject->setRootIndex(projectModelFilter->mapFromSource(projectModel->index(clangdProject.projectRoot)));
+            ui->treeViewProject->hideColumn(1);
+            ui->treeViewProject->hideColumn(2);
+            ui->treeViewProject->hideColumn(3);
+        }
         clientDialog.reset(new ClangClientDialog{std::move(clangdProject), this});
         clientDialog->setWindowFlags(clientDialog->windowFlags() | Qt::WindowMaximizeButtonHint | Qt::Window);
     }

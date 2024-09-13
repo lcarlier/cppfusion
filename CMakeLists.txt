@@ -38,10 +38,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         OpenProject.hpp OpenProject.cpp OpenProject.ui
         ApplicationSettings.hpp
         JsonHelper.hpp
-
-
-
-
+        ProjectModel.hpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET CppFusion APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

@@ -6,6 +6,7 @@
 #include <QMainWindow>
 
 #include "ClangClientDialog.hpp"
+#include "ProjectModel.hpp"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -24,6 +25,8 @@ public:
 private:
     std::unique_ptr<Ui::MainWindow> ui;
     std::unique_ptr<ClangClientDialog> clientDialog;
+    std::unique_ptr<ProjectModel> projectModel;
+    std::unique_ptr<ExtensionFilterProxyModel> projectModelFilter;
 private slots:
     void showOpenProject(bool trigger = false);
     void showClangDebugDialog(bool triggered = false);
