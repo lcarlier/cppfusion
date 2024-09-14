@@ -16,7 +16,13 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QTabWidget" name="tabWidget">
+     <widget class="QTabWidget" name="tabWidgetOpenFile">
+      <property name="usesScrollButtons">
+       <bool>true</bool>
+      </property>
+      <property name="tabsClosable">
+       <bool>true</bool>
+      </property>
       <widget class="QWidget" name="tab">
        <attribute name="title">
         <string>Tab 1</string>

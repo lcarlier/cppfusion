@@ -30,8 +30,12 @@ private:
     std::unique_ptr<ProjectModel> projectModel;
     std::unique_ptr<ExtensionFilterProxyModel> projectModelFilter;
     std::unique_ptr<Ui::MainWindow> ui; // Must be last to make sure that all the objects are deleted before the UI
+
+    void closeTab(int index);
 private slots:
     void showOpenProject(bool trigger = false);
     void showClangDebugDialog(bool triggered = false);
+    void onProjectFileDoubleClick(const QModelIndex &index);
+    void tabCloseRequested(int index);
 };
 #endif // MAINWINDOW_H
