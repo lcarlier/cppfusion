@@ -22,8 +22,8 @@
 #include "QFileRAII.hpp"
 #include "JsonHelper.hpp"
 
-static QString CLOSED_FILED{"closed"};
-static QString OPENED_FILED{"open"};
+static const QString CLOSED_FILED{"closed"};
+static const QString OPENED_FILED{"open"};
 
 static inline
     auto enumerate(const auto& data) {
