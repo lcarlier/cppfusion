@@ -8,7 +8,7 @@
 #include "OpenProject.hpp"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), clientDialog{nullptr}, ui(new Ui::MainWindow) {
+    : QMainWindow(parent), clangdClient{nullptr}, clientDialog{nullptr}, projectModel{nullptr}, ui(new Ui::MainWindow) {
     ui->setupUi(this);
 
     while(ui->tabWidgetOpenFile->count() > 0)
@@ -33,13 +33,7 @@ void MainWindow::showOpenProject(bool /*triggered*/)
         ClangdProject clangdProject = openProject.getClangdProject();
         {
             projectModel.reset(new ProjectModel{clangdProject, ui->treeViewProject});
-            projectModelFilter.reset(new ExtensionFilterProxyModel{clangdProject});
-            projectModelFilter->setSourceModel(projectModel.get());
-            ui->treeViewProject->setModel(projectModelFilter.get());
-            ui->treeViewProject->setRootIndex(projectModelFilter->mapFromSource(projectModel->index(clangdProject.projectRoot)));
-            ui->treeViewProject->hideColumn(1);
-            ui->treeViewProject->hideColumn(2);
-            ui->treeViewProject->hideColumn(3);
+            ui->treeViewProject->setModel(projectModel.get());
         }
         clangdClient.reset(new ClangdClient{clangdProject, this});
         clientDialog.reset(new ClangClientDialog{*clangdClient, clangdProject, this});
@@ -62,8 +56,8 @@ void MainWindow::onProjectFileDoubleClick(const QModelIndex &index) {
     {
         return;
     }
-    QFileSystemModel *model = static_cast<QFileSystemModel *>(ui->treeViewProject->model());
-    QString filePath = model->filePath(projectModelFilter->mapToSource(index));
+    ProjectModel *model = static_cast<ProjectModel *>(ui->treeViewProject->model());
+    QString filePath = model->filePath(index);
     QFileInfo fileInfo(filePath);
 
     if(fileInfo.isFile())

@@ -28,7 +28,6 @@ private:
     std::unique_ptr<ClangdClient> clangdClient;
     std::unique_ptr<ClangClientDialog> clientDialog;
     std::unique_ptr<ProjectModel> projectModel;
-    std::unique_ptr<ExtensionFilterProxyModel> projectModelFilter;
     std::unique_ptr<Ui::MainWindow> ui; // Must be last to make sure that all the objects are deleted before the UI
 
     void closeTab(int index);
