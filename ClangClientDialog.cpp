@@ -21,6 +21,7 @@
 #include "JsonTreeModel.hpp"
 #include "QFileRAII.hpp"
 #include "JsonHelper.hpp"
+#include "CppHelper.hpp"
 
 static const QString CLOSED_FILED{"closed"};
 static const QString OPENED_FILED{"open"};
@@ -92,6 +93,9 @@ ClangClientDialog::ClangClientDialog(ClangdClient& clangdClient_p, const ClangdP
     }
     ui->fileTableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->fileTableWidget, &QWidget::customContextMenuRequested, this, &ClangClientDialog::onOpenCloseRightClick);
+
+    ui->fileTableWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->symbolTableWidget, &QWidget::customContextMenuRequested, this, &ClangClientDialog::onSymbolBrowseRightClick);
 }
 
 void ClangClientDialog::addToRawLog(QString stringToLog) {
@@ -200,19 +204,20 @@ void ClangClientDialog::onStartQuerySymbolTimerExpired()
     {
         text.clear();
     }
-    static QStringList headers({"Name", "Kind", "File URI", "Start", "End", "Score"});
+    static QStringList headers({"Name", "Kind", "File", "Start", "End", "Score"});
     const std::vector<SymbolInfo> v = clangdClient.querySymbol(text);
     ui->symbolTableWidget->setColumnCount(headers.size());
     ui->symbolTableWidget->setRowCount(v.size());
     ui->symbolTableWidget->setHorizontalHeaderLabels(headers);
     for(const auto& [i, symbol] : enumerate(v))
     {
-        ui->symbolTableWidget->setItem(i, 0, new QTableWidgetItem(symbol.name));
-        ui->symbolTableWidget->setItem(i, 1, new QTableWidgetItem(QString::number(static_cast<int>(symbol.kind))));
-        ui->symbolTableWidget->setItem(i, 2, new QTableWidgetItem(symbol.fileUri));
-        ui->symbolTableWidget->setItem(i, 3, new QTableWidgetItem(QString::number(symbol.startPos.first) + ":" + QString::number(symbol.startPos.second)));
-        ui->symbolTableWidget->setItem(i, 4, new QTableWidgetItem(QString::number(symbol.endPos.first) + ":" + QString::number(symbol.endPos.second)));
-        ui->symbolTableWidget->setItem(i, 5, new QTableWidgetItem(QString::number(symbol.score)));
+        ui->symbolTableWidget->setItem(i, to_underlying(SymbolHeaderColumn::Name), new QTableWidgetItem(symbol.name));
+        ui->symbolTableWidget->setItem(i, to_underlying(SymbolHeaderColumn::Kind), new QTableWidgetItem(SYMBOL_KIND_STR[static_cast<int>(symbol.kind) - 1].data()));
+        QUrl uri{symbol.fileUri};
+        ui->symbolTableWidget->setItem(i, to_underlying(SymbolHeaderColumn::FilePath), new QTableWidgetItem(uri.toLocalFile()));
+        ui->symbolTableWidget->setItem(i, to_underlying(SymbolHeaderColumn::Start), new QTableWidgetItem(QString::number(symbol.startPos.first) + ":" + QString::number(symbol.startPos.second)));
+        ui->symbolTableWidget->setItem(i, to_underlying(SymbolHeaderColumn::End), new QTableWidgetItem(QString::number(symbol.endPos.first) + ":" + QString::number(symbol.endPos.second)));
+        ui->symbolTableWidget->setItem(i, to_underlying(SymbolHeaderColumn::Score), new QTableWidgetItem(QString::number(symbol.score)));
     }
     ui->symbolTableWidget->resizeColumnsToContents();
 }
@@ -248,12 +253,14 @@ void ClangClientDialog::onOpenCloseRightClick(const QPoint &pos)
         {
             curAction = contextMenu.addAction("Close");
         }
+        QAction* getAStAction = contextMenu.addAction("Get AST");
+        QAction* getDocumentSymbol = contextMenu.addAction("Get document symbols");
 
         QAction* selectedAction = contextMenu.exec(globalPos);
 
+        const QString pathToFile = ui->fileTableWidget->item(row, 0)->text();
         if(selectedAction == curAction)
         {
-            const QString pathToFile = ui->fileTableWidget->item(row, 0)->text();
             if(canOpen)
             {
                 clangdClient.openFile(pathToFile);
@@ -264,6 +271,40 @@ void ClangClientDialog::onOpenCloseRightClick(const QPoint &pos)
                 clangdClient.closeFile(pathToFile);
                 status->setText(CLOSED_FILED);
             }
+        }
+        else if(selectedAction == getAStAction)
+        {
+            clangdClient.getAst(pathToFile);
+        }
+        else if(selectedAction == getDocumentSymbol)
+        {
+            clangdClient.getDocumentSymbols(pathToFile);
+        }
+    }
+}
+
+void ClangClientDialog::onSymbolBrowseRightClick(const QPoint &pos)
+{
+    // Map the point to the global position
+    const QPoint globalPos = ui->fileTableWidget->viewport()->mapToGlobal(pos);
+    const QTableWidgetItem *item = ui->fileTableWidget->itemAt(pos);
+
+    if(item) {
+        // Create a context menu
+        QMenu contextMenu;
+
+        QAction* searchReferences = contextMenu.addAction("Search reference");
+
+        QAction* selectedAction = contextMenu.exec(globalPos);
+        if(selectedAction == searchReferences)
+        {
+            int row = item->row();
+            const QString fileUri = ui->symbolTableWidget->item(row, to_underlying(SymbolHeaderColumn::FilePath))->text();
+            const QString lineChar = ui->symbolTableWidget->item(row, to_underlying(SymbolHeaderColumn::Start))->text();
+            QStringList parts = lineChar.split(":");
+            qint64 line = parts[0].toInt();
+            qint64 character = parts[1].toInt();
+            clangdClient.getSymbolReferences(fileUri, line, character);
         }
     }
 }

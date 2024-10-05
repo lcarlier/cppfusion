@@ -267,8 +267,8 @@ void ClangdClient::initServer()
             }
         },
         "clientInfo": {
-            "name": "Qt Creator",
-            "version": "14.0.1"
+            "name": "Cpp Fusion",
+            "version": "1.0"
         },
         "initializationOptions": {
         },
@@ -384,6 +384,98 @@ std::vector<SymbolInfo> ClangdClient::querySymbol(QString symbol, double limit)
     return rv;
 }
 
+QJsonDocument ClangdClient::getAst(const QString& path)
+{
+    openFile(path);
+    QMutex mutex;
+    QWaitCondition condition;
+    const QString uri = QUrl::fromLocalFile(path).toString();
+    QJsonObject message = getMessage("textDocument/ast",
+                                     {{"textDocument",
+                                         QJsonObject{
+                                             {"uri", uri}
+                                         }
+                                     }});
+    QJsonDocument rv;
+    sendData(QJsonDocument{message}, true, [&rv, &mutex, &condition](const QJsonDocument& answer)
+             {
+                 QMutexLocker locker(&mutex);
+                 rv = answer;
+                 condition.wakeAll();
+             });
+    QMutexLocker locker(&mutex);
+    condition.wait(&mutex);
+    closeFile(path);
+
+    return rv;
+}
+
+QJsonDocument ClangdClient::getDocumentSymbols(const QString& path)
+{
+    openFile(path);
+    QMutex mutex;
+    QWaitCondition condition;
+    const QString uri = QUrl::fromLocalFile(path).toString();
+    QJsonObject message = getMessage("textDocument/documentSymbol",
+                                     {{"textDocument",
+                                         QJsonObject{
+                                             {"uri", uri}
+                                         }
+                                     }});
+    QJsonDocument rv;
+    sendData(QJsonDocument{message}, true, [&rv, &mutex, &condition](const QJsonDocument& answer)
+             {
+                 QMutexLocker locker(&mutex);
+                 rv = answer;
+                 condition.wakeAll();
+             });
+    QMutexLocker locker(&mutex);
+    condition.wait(&mutex);
+
+    closeFile(path);
+
+    return rv;
+}
+
+QJsonDocument ClangdClient::getSymbolReferences(const QString& path, qint64 line, qint64 character)
+{
+    openFile(path);
+    QMutex mutex;
+    QWaitCondition condition;
+    const QString uri = QUrl::fromLocalFile(path).toString();
+    QJsonObject message = getMessage("textDocument/references",
+                                     {{"textDocument",
+                                         QJsonObject{
+                                             {"uri", uri}
+                                         }
+                                     },
+                                      {"position",
+                                          QJsonObject{
+                                              {"line", line},
+                                              {"character", character}
+                                          }
+                                      },
+                                      {"context",
+                                          QJsonObject{
+                                              {"includeDeclaration", true}
+                                          }
+                                      },
+                                      {"workDoneToken", QUuid::createUuid().toString(QUuid::WithoutBraces)}});
+    QJsonDocument rv;
+    sendData(QJsonDocument{message}, true, [&rv, &mutex, &condition](const QJsonDocument& answer)
+             {
+                 QMutexLocker locker(&mutex);
+                 rv = answer;
+                 condition.wakeAll();
+             });
+    QMutexLocker locker(&mutex);
+    condition.wait(&mutex);
+
+    closeFile(path);
+
+    return rv;
+}
+
 void ClangdClient::clangdStarted()
 {
     initServer();
@@ -394,12 +486,16 @@ void ClangdClient::processMessageReceived(QJsonDocument document)
     emit messageReceived(document);
     const auto& document_object = document.object();
     const QString& method = document_object["method"].toString();
-    if(method == "window/workDoneProgress/create")
+    if(method == "window/workDoneProgress/create" || method == "workspace/semanticTokens/refresh")
     {
         QJsonObject answer = getMessage();
         answer["id"] = document_object["id"].toInt();
         answer["result"] = QJsonValue::Null;
         sendData(QJsonDocument{std::move(answer)}, false, std::nullopt);
+        if(method == "workspace/semanticTokens/refresh")
+        {
+            emit refreshTokens();
+        }
     }
 
 }
@@ -421,10 +517,9 @@ QJsonDocument ClangdClient::getFinalMessage(const QJsonDocument& jsonData, bool 
 {
     QJsonObject jsonObject = jsonData.object();
     if (useId) {
-        jsonObject["id"] = QUuid::createUuid().toString();
+        jsonObject["id"] = QUuid::createUuid().toString(QUuid::WithoutBraces);
     }
     QJsonDocument doc(jsonObject);
 
-    // responseArea->appendPlainText("sending\n" + finalMessage);
     return doc;
 }

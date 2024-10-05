@@ -40,6 +40,11 @@ private:
     void clearHighlights();
     void highlightAllOccurrences();
 
+    enum class SymbolHeaderColumn
+    {
+        Name, Kind, FilePath, Start, End, Score
+    };
+
 private slots:
     void onMessageSelected(const QItemSelection &selected, const QItemSelection &deselected);
     void onColumnExpandedCollapsed(const QModelIndex &index);
@@ -47,4 +52,5 @@ private slots:
     void onStartQuerySymbolTimerExpired();
     void onSymbolSearchTextChanged(const QString &text);
     void onOpenCloseRightClick(const QPoint &pos);
+    void onSymbolBrowseRightClick(const QPoint& pos);
 };

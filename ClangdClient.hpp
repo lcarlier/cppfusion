@@ -1,10 +1,11 @@
-#ifndef CLANGDCLIENT_H
-#define CLANGDCLIENT_H
+#pragma once
 
 #include <optional>
 #include <functional>
 #include <vector>
 #include <unordered_map>
+#include <array>
+#include <string_view>
 
 #include <QObject>
 #include <QProcess>
@@ -12,6 +13,8 @@
 #include <QString>
 #include <QThread>
 #include <QFileInfo>
+
+#include "CppHelper.hpp"
 
 struct ClangdProject {
     QString projectRoot;
@@ -55,6 +58,36 @@ struct SymbolInfo {
     Position startPos;
     Position endPos;
     double score;
+};
+
+static constexpr std::array<std::string_view, to_underlying(SymbolInfo::Kind::TypeParameter)> SYMBOL_KIND_STR
+{
+    "File",
+    "Module",
+    "Namespace",
+    "Package",
+    "Class",
+    "Method",
+    "Property",
+    "Field",
+    "Constructor",
+    "Enum",
+    "Interface",
+    "Function",
+    "Variable",
+    "Constant",
+    "String",
+    "Number",
+    "Boolean",
+    "Array",
+    "Object",
+    "Key",
+    "Null",
+    "EnumMember",
+    "Struct",
+    "Event",
+    "Operator",
+    "TypeParameter"
 };
 
 using Cb = std::function<void(const QJsonDocument&)>;
@@ -238,6 +271,9 @@ public:
     void openFile(const QString& path);
     void closeFile(const QString& path);
     std::vector<SymbolInfo> querySymbol(QString symbol, double limit = 10000);
+    QJsonDocument getAst(const QString& path);
+    QJsonDocument getDocumentSymbols(const QString& path);
+    QJsonDocument getSymbolReferences(const QString& path, qint64 line, qint64 character);
 
 private:
     void sendData(const QJsonDocument&, bool useId = true, OptionalCb callback = std::nullopt);
@@ -259,6 +295,5 @@ signals:
     void emitLog(QString stringToLog);
     void messageSent(QJsonDocument document);
     void messageReceived(QJsonDocument document);
+    void refreshTokens();
 };
-
-#endif // CLANGDCLIENT_H
