@@ -11,6 +11,9 @@
 #include <QJsonArray>
 #include <QAbstractItemModel>
 #include <QModelIndex>
+#include <QList>
+#include <QFuture>
+#include <QtConcurrent>
 
 #include "ClangdClient.hpp"
 #include "QFileRAII.hpp"
@@ -84,17 +87,28 @@ public:
         TreeItem* projectRoot = rootItem->appendChild(std::make_unique<TreeItem>(QVariantList{QVariant{topProjectQdir.fileName()}}, rootItem.get()));
         TreeItem* sourceFileItem = projectRoot->appendChild(std::make_unique<TreeItem>(QVariantList{QVariant{"Source files"}}, projectRoot));
 
-        //TreeItem* topFile = sourceFileItem->appendChild(std::make_unique<TreeItem>(QVariantList{QVariant{topProjectQdir.fileName()}}, sourceFileItem));
-
         QStringList validFiles;
         {
             QFileRAII compileCommands{clangdProject.compileCommandJson};
             const QJsonDocument compileCommandsJson = QJsonDocument::fromJson(compileCommands.readAll().toUtf8());
             const QJsonArray& jsonArray = compileCommandsJson.array();
+            QList<QFuture<void>> futures;
+            QMutex mutex;
             for(const auto& elem: jsonArray)
             {
-                const QJsonObject& curObject = elem.toObject();
-                validFiles.append(getFullPathFromCompileCommandElement(curObject));
+                QFuture<void> future = QtConcurrent::run([&](const QJsonObject curObject)
+                {
+                    QStringList allFiles = getIncludedHeaderFiles(curObject, clangdProject.projectRoot);
+                    QString fullPath = getFullPathFromCompileCommandElement(curObject);
+                    QMutexLocker locker(&mutex);
+                    validFiles.append(fullPath);
+                    validFiles.append(allFiles);
+                }, elem.toObject());
+                futures.append(future);
+            }
+            for(auto& future : futures)
+            {
+                future.waitForFinished();
             }
         }
 
